@@ -125,3 +125,9 @@ with col_right:
                      })
     fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_pie, width='stretch')
+
+    st.divider()
+    st.divider()
+    st.write("Credits")
+    st.write("https://www.vecteezy.com/free-videos/car-pulling-over")
+    st.write("https://www.vecteezy.com/free-videos/traffic")
