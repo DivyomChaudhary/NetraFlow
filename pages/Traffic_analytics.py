@@ -63,9 +63,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 db_path = os.path.join(project_root, "logs_", "traffic_security.db")
 
-# ... (data loading logic) ...
 def load_data():
-    # Ensure this path matches your SecuritySystem db_path
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
     # Convert timestamp to datetime objects for plotting
@@ -81,7 +79,6 @@ except Exception as e:
 
 
 st.subheader("📊 Traffic Distribution by 5s")
-# Creating a dummy column for colors to make it vibrant
 type_counts = df.resample('5s', on='timestamp').count().reset_index()
 fig_bar = px.bar(type_counts,
                  x='timestamp',

@@ -1,10 +1,14 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from langchain_experimental.agents import create_pandas_dataframe_agent
-from langchain_groq import ChatGroq
 import os
 from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langchain_experimental.tools import PythonAstREPLTool
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+from typing import Annotated, TypedDict
 
 load_dotenv()
 st.markdown("""
@@ -61,75 +65,72 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="NetraFlow", page_icon="👁",layout="wide")
+st.set_page_config(page_title="NetraFlow", page_icon="👁", layout="wide")
 st.title('ASK AI')
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-db_path = os.path.join(project_root, "logs_", "traffic_security.db")
+# --- Styles (Kept as you had them) ---
+st.markdown("""<style>/* ... your existing CSS ... */</style>""", unsafe_allow_html=True)
 
+# --- Database Setup ---
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs_", "traffic_security.db")
+
+
+@st.cache_data
 def load_data():
-    # Ensure this path matches your SecuritySystem db_path
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
-    # Convert timestamp to datetime objects for plotting
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
     conn.close()
     return df
 
-try:
-    df = load_data()
-except Exception as e:
-    st.error(f"Could not connect to database: {e}")
-    st.stop()
 
-agent = None
-
-if df is not None:
-    st.write("Provide a concise and helpful prompt for suitable insights...")
-    question = st.text_input("Enter your question")
-
-    @st.cache_resource
-    def create_agent(df):
-            prefix = """
-            You are a traffic data expert. You are working with a pandas dataframe named `df`.
-            The columns are: timestamp, vehicle_id, type, color, is_suspicious, and s3_key.
-            If the user asks for a count, use the vehicle_id column. 
-            Always provide a concise and helpful answer.
-            """
-
-            llm = ChatGroq(
-                temperature=0,
-                model_name="llama-3.3-70b-versatile",
-                groq_api_key=st.secrets["GROQ_API_KEY"]
-            )
-            return create_pandas_dataframe_agent(
-                llm,
-                df,
-                verbose=True,
-                allow_dangerous_code=True,
-                prefix=prefix,  # Helping the AI understand the context
-                handle_parsing_errors=True
-            )
+df = load_data()
 
 
-    if question:
-        agent = create_agent(df)
+# --- LangGraph Setup ---
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
 
-        with st.spinner('🔍 Analyzing traffic logs...'):
-            try:
+tool = PythonAstREPLTool(locals={"df": df})
+llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=st.secrets["GROQ_API_KEY"])
+llm_with_tools = llm.bind_tools([tool])
 
-                response = agent.invoke(question)
+system_message = {
+    "role": "system",
+    "content": "You are a traffic data expert. You have access to a pandas DataFrame named 'df'. Make the conversation abstract and do not mention any underlying variable names like df in the conversation, just pure data and facts"
+               "Always use the 'python_repl' tool to inspect 'df' when asked about vehicle logs, counts, or data contents."
+}
 
-                st.write("### Answer:")
+def chatbot(state: State):
+    messages = [system_message] + state["messages"]
+    return {"messages": [llm_with_tools.invoke(messages)]}
 
-                # Extract the output
-                if isinstance(response, dict):
-                    output_text = response.get("output", "I couldn't find an answer.")
-                    st.success(output_text)
-                else:
-                    st.success(str(response))
-            except Exception as e:
-                # Better debugging for you
-                st.error("Check the API key")
-                st.write(e)
+graph_builder = StateGraph(State)
+graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_node("tools", ToolNode([tool]))
+graph_builder.add_edge(START, "chatbot")
+graph_builder.add_conditional_edges("chatbot", lambda state: "tools" if state["messages"][-1].tool_calls else END)
+graph_builder.add_edge("tools", "chatbot")
+graph = graph_builder.compile()
+
+# --- Memory Management ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# --- Chat Interaction ---
+if prompt := st.chat_input("Enter your question"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.spinner('🔍 Analyzing traffic logs...'):
+        # Pass the messages correctly formatted
+        response = graph.invoke({"messages": st.session_state.messages})
+        output_text = response["messages"][-1].content
+
+        st.session_state.messages.append({"role": "assistant", "content": output_text})
+        with st.chat_message("assistant"):
+            st.markdown(output_text)

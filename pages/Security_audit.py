@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import os
+import boto3
+from dotenv import load_dotenv
+
+st.set_page_config(page_title="NetraFlow", page_icon="👁",layout="wide")
 
 st.subheader("🖼️ Object Vault")
 st.markdown("""
@@ -58,16 +62,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="NetraFlow", page_icon="👁",layout="wide")
-
+# Force the loader to look in the parent directory (project root)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
+load_dotenv(os.path.join(project_root, '.env'))
 db_path = os.path.join(project_root, "logs_", "traffic_security.db")
 
 # 1. Fetch data
 conn = sqlite3.connect(db_path)
 df = pd.read_sql_query("SELECT * FROM vehicle_logs WHERE is_suspicious = 1", conn)
 conn.close()
+
+def get_presigned_url(s3_key):
+    s3_client = boto3.client(
+            's3',
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_KEY')
+    )
+    return s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': os.getenv('BUCKET_NAME'), 'Key': s3_key},
+            ExpiresIn=600  # URL expires in 10 mins
+    )
+
 
 # 2. Check if data exists BEFORE defining columns
 if df.empty:
@@ -81,12 +98,11 @@ else:
         col_index = idx % 3
 
         with cols[col_index]:
-            # Construct the URL (Make sure 's3_key' exists in your DB)
             bucket = os.getenv('BUCKET_NAME')
             file_key = row.get('s3_key', None)  # .get prevents crash if column missing
 
             if file_key:
-                img_url = f"https://{bucket}.s3.amazonaws.com/{file_key}"
+                img_url = get_presigned_url(file_key)
                 st.image(img_url, width='stretch')
                 st.caption(f" {row['color']} {row['type']} | {row['timestamp']}")
             else:

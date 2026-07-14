@@ -1,4 +1,6 @@
-from ultralytics import YOLO
+# import torch
+# torch.backends.cudnn.benchmark = True
+from ultralytics import YOLO, solutions
 import cv2
 import numpy as np
 import math
@@ -17,9 +19,18 @@ load_dotenv()
 import boto3
 from botocore.exceptions import NoCredentialsError
 
-cap = cv2.VideoCapture('../assets/vecteezy_traffic-Danil_Rudenko.mp4')
+cap = cv2.VideoCapture('../assets/vecteezy_traffic-BStock.mp4')
 wd = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 ht = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+line_pts = [(0, ht // 2 + 100), (wd, ht // 2 + 100)]
+# Initialize SpeedEstimator
+speed_obj = solutions.SpeedEstimator(
+    model="../YOLO-weights/yolov8s.pt",
+    region=line_pts,
+    show=False
+)
+
 mask = cv2.imread('../assets/mask.png')
 if mask is None:
     print("NO mask found!")
@@ -61,6 +72,7 @@ class SecuritySystem:
         self._initialize_database()
         # Pre-opening a persistent connection acts like a simple pool for this script
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.execute('pragma journal_mode=wal;')
         self.bucket_name = os.getenv('BUCKET_NAME')
         self.s3_client = boto3.client(
             's3',
@@ -102,6 +114,8 @@ class SecuritySystem:
                            TEXT,
                            color
                            TEXT,
+                           speed
+                           REAL,
                            is_suspicious
                            BOOLEAN,
                            s3_key
@@ -115,13 +129,14 @@ class SecuritySystem:
         """Uses the context manager to log data efficiently."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         is_suspicious = 1 if (v_data.get("is_blacklisted", False) or v_data.get("hazard_type") is not None) else 0
+        speed = v_data.get("speed", 0)
 
         # This block replaces opening/closing connections manually
         with self.get_cursor() as cursor:
             cursor.execute('''
-                           INSERT INTO vehicle_logs (timestamp, vehicle_id, type, color, is_suspicious, s3_key)
-                           VALUES (?, ?, ?, ?, ?, ?)
-                           ''', (timestamp, v_id, v_data['type'], v_data['color'], is_suspicious, s3_key))
+                           INSERT INTO vehicle_logs (timestamp, vehicle_id, type, color,speed, is_suspicious, s3_key)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)
+                           ''', (timestamp, v_id, v_data['type'], v_data['color'],speed, is_suspicious, s3_key))
 
     def _load_blacklist(self, path):
         """Loads the watch list into a set for O(1) lookup speed."""
@@ -135,6 +150,10 @@ class SecuritySystem:
         except FileNotFoundError:
             print(f"Warning: {path} not found. Blacklist is empty.")
         return watchlist
+
+    def generate_vehicle_signature(self, speed=0):
+        speed_code = speed if speed != "Scanning..." else "UNK"
+        return f"{int(speed)} km/h"
 
     def check_status(self, vehicle_type, color, is_exception):
         """Business logic to determine if a vehicle is suspicious."""
@@ -204,7 +223,10 @@ def update_security_dashboard(v_id, v_type, v_color):
 
 
 def process_frame(image, imgRegion):
-    results = coco_model(imgRegion, stream=True)
+    # This automatically tracks objects and calculates their speed
+    speed_res = speed_obj(image)
+    image = speed_res.plot_im
+    results = coco_model(imgRegion, stream=True, imgsz=480, verbose=False)
     detections = np.empty((0, 5))
 
     temp_classes = {}
@@ -252,9 +274,18 @@ def process_frame(image, imgRegion):
                             "color": "Scanning...",
                             "logged": False,
                             "trajectory": [],  # Store the last 10 (x,y) positions
+                            "speed": 0,
                             "is_aggressive": False,
                             "uploaded": False
                             }
+
+        v_data = vehicles[Id]
+        v_data["trajectory"].append((cx,cy))
+        v_data["speed"] = speed_obj.spd.get(Id, 0)
+
+        # Speed threshold hazard (New behavior check)
+        if v_data["speed"] > 100:  # Example limit 100km/h
+            v_data["hazard_type"] = "SPEEDING"
 
         if limit[0] < cx < limit[2] and limit[1] - 15 < cy < limit[3] + 15:
             if not vehicles[Id]["logged"]:
@@ -295,9 +326,15 @@ def process_frame(image, imgRegion):
 
                     security.log_vehicle(Id, vehicles[Id], s3_filename)
             # cv2.line(image, (limit[0], limit[1]), (limit[2], limit[3]), (0, 255, 0), 4) # can toggle it on for limit setting
+            signature = security.generate_vehicle_signature(v_data["speed"])
 
-        v_data = vehicles[Id]
-        v_data["trajectory"].append((cx,cy))
+            # Abstraction Label (Signature)
+            cv2.rectangle(image, (x1, y1 - 22), (x1 + 160, y1), (40, 40, 40), -1)
+            cv2.putText(image, signature, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+
+            if v_data.get("is_aggressive"):
+                cvzone.putTextRect(image, "SWERVING", (x1, y2 + 25), scale=1, thickness=1, colorR=(0, 0, 255), offset=3)
+
         recent_points = v_data["trajectory"][-10:]
         if len(v_data["trajectory"]) >= 10:
             total_hori_drift = abs(recent_points[-1][0] - recent_points[0][0])
@@ -321,9 +358,9 @@ def process_frame(image, imgRegion):
             b_color = (255, 0, 255)
             thickness = 2
 
-        cv2.rectangle(image, (x1, y1), (x2, y2), b_color, thickness)
-        cvzone.putTextRect(image, display_text, (max(0, x1), max(35, y1)),
-                           scale=1, thickness=1, offset=3, colorR=b_color)
+        # cv2.rectangle(image, (x1, y1), (x2, y2), b_color, thickness)
+        # cvzone.putTextRect(image, display_text , (max(0, x1), max(35, y1)),
+        #                    scale=1, thickness=1, offset=3, colorR=b_color)
 
         if v_data.get("is_blacklisted") or "hazard_type" in v_data:
             color = (0, 0, 255)
@@ -355,18 +392,19 @@ while True:
     curr_time = time.time()
 
     # UI Dashboard
-    cv2.putText(image, "SECURITY LOG (RECENT)", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     fps = 1 + 1 / (curr_time - prev_time)
     prev_time = curr_time
 
-    cv2.rectangle(image, (wd - 200, 0), (wd, 100), (0, 0, 0), -1)  # Background
-    cv2.putText(image, f"FPS: {int(fps)}", (wd - 180, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    # UI Panel
+    cv2.rectangle(image, (wd - 200, 0), (wd, 100), (0, 0, 0), -1)
     cv2.putText(image, f"SQL: Connected", (wd - 180, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-    cv2.putText(image, f"AWS S3: Active", (wd - 180, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-    for i, alert in enumerate(recent_alerts):
+    cv2.putText(image, "NETRAFLOW SEC-CORE", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    for i, alert in enumerate(recent_alerts[:5]):
         cv2.putText(image, alert, (20, 85 + (i * 30)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-    cv2.imshow('DCar Security System',image)
+
+    cv2.putText(image, f"FPS: {int(fps)}", (wd - 180, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    cv2.putText(image, "AWS S3: Connected", (wd - 180, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    cv2.imshow('👁 NetraFlow',image)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 cap.release()
