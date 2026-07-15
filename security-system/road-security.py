@@ -229,6 +229,7 @@ def process_frame(image, imgRegion):
     results = coco_model(imgRegion, stream=True, imgsz=480, verbose=False)
     detections = np.empty((0, 5))
 
+    max_speed_tracker = {}
     temp_classes = {}
 
     for r in results:
