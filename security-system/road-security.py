@@ -129,7 +129,7 @@ class SecuritySystem:
         """Uses the context manager to log data efficiently."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         is_suspicious = 1 if (v_data.get("is_blacklisted", False) or v_data.get("hazard_type") is not None) else 0
-        speed = v_data.get("speed", 0)
+        speed = v_data.get("max_speed", 0)
 
         # This block replaces opening/closing connections manually
         with self.get_cursor() as cursor:
@@ -276,13 +276,17 @@ def process_frame(image, imgRegion):
                             "logged": False,
                             "trajectory": [],  # Store the last 10 (x,y) positions
                             "speed": 0,
+                            "max_speed": 0,
                             "is_aggressive": False,
                             "uploaded": False
                             }
 
         v_data = vehicles[Id]
         v_data["trajectory"].append((cx,cy))
-        v_data["speed"] = speed_obj.spd.get(Id, 0)
+        current_speed = speed_obj.spd.get(Id, 0)
+        v_data["speed"] = current_speed
+        if current_speed > v_data["max_speed"]:
+            v_data["max_speed"] = current_speed
 
         # Speed threshold hazard (New behavior check)
         if v_data["speed"] > 100:  # Example limit 100km/h
