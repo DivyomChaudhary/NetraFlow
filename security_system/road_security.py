@@ -1,5 +1,5 @@
-# import torch
-# torch.backends.cudnn.benchmark = True
+import torch
+torch.backends.cudnn.benchmark = True
 from ultralytics import YOLO, solutions
 import cv2
 import numpy as np
@@ -137,6 +137,30 @@ class SecuritySystem:
                            INSERT INTO vehicle_logs (timestamp, vehicle_id, type, color,speed, is_suspicious, s3_key)
                            VALUES (?, ?, ?, ?, ?, ?, ?)
                            ''', (timestamp, v_id, v_data['type'], v_data['color'],speed, is_suspicious, s3_key))
+
+    def wipe_system(self, password_provided):
+        """Securely deletes all database logs and S3 images."""
+        # Check against environment variable
+        if password_provided != os.getenv('ADMIN_PASSWORD'):
+            return False, "Invalid Password"
+
+        try:
+            # 1. Clear Database
+            with self.get_cursor() as cursor:
+                cursor.execute("DELETE FROM vehicle_logs")
+
+            # 2. Clear S3 Bucket
+            # List all files and delete them
+            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name)
+            if 'Contents' in response:
+                objects_to_delete = [{'Key': obj['Key']} for obj in response['Contents']]
+                self.s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={'Objects': objects_to_delete}
+                )
+            return True, "System wiped successfully."
+        except Exception as e:
+            return False, str(e)
 
     def _load_blacklist(self, path):
         """Loads the watch list into a set for O(1) lookup speed."""

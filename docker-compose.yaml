@@ -1,0 +1,10 @@
+services:
+  netraflow:
+    build: .
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env  # load .env secrets
+    volumes:
+      - ./logs_:/app/logs_
+      - ./.streamlit:/app/.streamlit  # Maps local secrets.toml

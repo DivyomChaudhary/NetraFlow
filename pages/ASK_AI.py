@@ -96,10 +96,9 @@ llm_with_tools = llm.bind_tools([tool])
 
 system_message = {
     "role": "system",
-    "content": "You are a traffic data expert. You have access to a pandas DataFrame named 'df'. Make the conversation abstract and do not mention any underlying variable names like df in the conversation, just pure data and facts"
+    "content": "You are a traffic data expert. You have access to a pandas DataFrame named 'df'. Make the conversation abstract and do not mention any underlying variable names like df or sql table columns in the conversation, just pure data and facts"
                "Always use the 'python_repl' tool to inspect 'df' when asked about vehicle logs, counts, or data contents."
 }
-
 def chatbot(state: State):
     messages = [system_message] + state["messages"]
     return {"messages": [llm_with_tools.invoke(messages)]}
