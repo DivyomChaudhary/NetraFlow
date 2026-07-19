@@ -64,7 +64,8 @@ st.markdown("""
 @st.cache_data(ttl=30)
 def load_data():
     db_path = os.path.join("logs_", "traffic_security.db")
-    conn = sqlite3.connect(db_path)
+    db_uri = f"file:{db_path}?mode=ro"
+    conn = sqlite3.connect(db_uri, uri=True, timeout=10)
     df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     conn.close()

@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+logs_/
+models/         # Exclude models from the build
+.env
+.streamlit/secrets.toml
+venv310/
+YOLO-weights/

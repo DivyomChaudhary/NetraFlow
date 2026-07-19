@@ -60,11 +60,12 @@ st.markdown("""
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 db_path = os.path.join(project_root, "logs_", "traffic_security.db")
+db_uri = f"file:{db_path}?mode=ro"
 
 # --- Database Connection ---
 def load_data():
     # Ensure this path matches your SecuritySystem db_path
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_uri, uri=True, timeout=5)
     df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
     # Convert timestamp to datetime objects for plotting
     df['timestamp'] = pd.to_datetime(df['timestamp'])

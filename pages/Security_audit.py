@@ -67,9 +67,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 load_dotenv(os.path.join(project_root, '.env'))
 db_path = os.path.join(project_root, "logs_", "traffic_security.db")
+db_uri = f"file:{db_path}?mode=ro"
 
 # 1. Fetch data
-conn = sqlite3.connect(db_path)
+conn = sqlite3.connect(db_uri, uri=True, timeout=10)
 df = pd.read_sql_query("SELECT * FROM vehicle_logs WHERE is_suspicious = 1", conn)
 conn.close()
 

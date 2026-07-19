@@ -68,10 +68,11 @@ limit = [100,340,1200,340]
 class SecuritySystem:
     def __init__(self, blacklist_path, db_path='../logs_/traffic_security.db'):
         self.db_path = db_path
+        self.db_uri = f"file:{db_path}?mode=ro"
         self.blacklist = self._load_blacklist(blacklist_path)
         self._initialize_database()
         # Pre-opening a persistent connection acts like a simple pool for this script
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.db_uri, uri=True, timeout=10, check_same_thread=False)
         self.conn.execute('pragma journal_mode=wal;')
         self.bucket_name = os.getenv('BUCKET_NAME')
         self.s3_client = boto3.client(

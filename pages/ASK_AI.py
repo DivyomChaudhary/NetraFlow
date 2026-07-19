@@ -73,11 +73,11 @@ st.markdown("""<style>/* ... your existing CSS ... */</style>""", unsafe_allow_h
 
 # --- Database Setup ---
 db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs_", "traffic_security.db")
-
+db_uri = f"file:{db_path}?mode=ro"
 
 @st.cache_data
 def load_data():
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_uri, uri=True, timeout=5)
     df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
     conn.close()
     return df
