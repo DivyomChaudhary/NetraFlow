@@ -58,6 +58,12 @@ Stop containers gracefully:
 docker compose down
 ```
 
+Resolve common Errors:
+
+```bash
+sqlite3.OperationalError: unable to open database file
+```
+
 Credits:
 
 www.vecteezy.com
