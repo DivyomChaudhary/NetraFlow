@@ -44,7 +44,7 @@ docker compose up -d --build
 
 Access the application directly via your browser at `http://<your-server-ip>` (mapped to port 80).
 
-🛠️ Maintenance & Monitoring
+### 🛠️ Maintenance & Monitoring
 
 View live logs:
 
@@ -52,17 +52,36 @@ View live logs:
 docker compose logs -f
 ```
 
+---
+
 Stop containers gracefully:
 
 ```bash
 docker compose down
 ```
 
+---
+
 Resolve common Errors:
 
 ```bash
 sqlite3.OperationalError: unable to open database file
 ```
+The ***traffic_security.db*** file is either inexistent or not connected properly. There might also be an error in the ***logs_*** folder.
+
+```bash
+streamlit.errors.StreamlitSecretNotFoundError
+```
+The ***.streamlit/secrets.toml*** file is not created. ASK_AI.py will not work.
+
+```bash
+TypeError: expected string or bytes-like object
+```
+The ***.env*** file is not created. AWS APIs will not work.
+
+Other passive errors:
+- **Suspicious vehicles data malfunctioning**:
+***logs_*** folder not created or the ***blacklisted.csv*** file is empty/inexistent.
 
 Credits:
 
