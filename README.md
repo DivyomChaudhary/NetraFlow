@@ -35,7 +35,7 @@ To run the application using modern containerized standards with persistent stor
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/ConfidentialDC/Netraflow.git
+git clone https://github.com/DivyomChaudhary/Netraflow.git
 cd Netraflow
 
 # 2. Build and launch using Docker Compose (detached mode)
@@ -46,7 +46,7 @@ Access the application directly via your browser at `http://<your-server-ip>` (m
 
 ### 🛠️ Maintenance & Monitoring
 
-View live logs:
+- View live logs:
 
 ```bash
 docker compose logs -f
@@ -54,7 +54,7 @@ docker compose logs -f
 
 ---
 
-Stop containers gracefully:
+- Stop containers gracefully:
 
 ```bash
 docker compose down
@@ -62,7 +62,7 @@ docker compose down
 
 ---
 
-Resolve common Errors:
+- Resolve common Errors:
 
 ```bash
 sqlite3.OperationalError: unable to open database file
