@@ -3,11 +3,9 @@ import pandas as pd
 import sqlite3
 import os
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
-from langchain_experimental.tools import PythonAstREPLTool
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
+from groq import Groq
+from pydantic import BaseModel
+import json
 from typing import Annotated, TypedDict
 
 load_dotenv()
@@ -82,54 +80,20 @@ def load_data():
     conn.close()
     return df
 
-
 df = load_data()
 
+client = Groq()
 
-# --- LangGraph Setup ---
-class State(TypedDict):
-    messages: Annotated[list, add_messages]
+class ValidationStatus(BaseModel):
+    is_valid: bool
+    syntax_errors: list[str]
 
-tool = PythonAstREPLTool(locals={"df": df})
-llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=st.secrets["GROQ_API_KEY"])
-llm_with_tools = llm.bind_tools([tool])
-
-system_message = {
-    "role": "system",
-    "content": "You are a traffic data expert. You have access to a pandas DataFrame named 'df'. Make the conversation abstract and do not mention any underlying variable names like df or sql table columns in the conversation, just pure data and facts"
-               "Always use the 'python_repl' tool to inspect 'df' when asked about vehicle logs, counts, or data contents."
-}
-def chatbot(state: State):
-    messages = [system_message] + state["messages"]
-    return {"messages": [llm_with_tools.invoke(messages)]}
-
-graph_builder = StateGraph(State)
-graph_builder.add_node("chatbot", chatbot)
-graph_builder.add_node("tools", ToolNode([tool]))
-graph_builder.add_edge(START, "chatbot")
-graph_builder.add_conditional_edges("chatbot", lambda state: "tools" if state["messages"][-1].tool_calls else END)
-graph_builder.add_edge("tools", "chatbot")
-graph = graph_builder.compile()
-
-# --- Memory Management ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# --- Chat Interaction ---
-if prompt := st.chat_input("Enter your question"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.spinner('🔍 Analyzing traffic logs...'):
-        # Pass the messages correctly formatted
-        response = graph.invoke({"messages": st.session_state.messages})
-        output_text = response["messages"][-1].content
-
-        st.session_state.messages.append({"role": "assistant", "content": output_text})
-        with st.chat_message("assistant"):
-            st.markdown(output_text)
+response = client.chat.completions.create(
+    model="openai/gpt-oss-120b",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a SQL expert. Generate structured SQL queries from natural language descriptions with proper syntax validation and metadata.",
+        },
+        {"role": "user", "content": "Find all customers who made orders over $500 in the last 30 days, show their name, email, and total order amount"},
+    ],

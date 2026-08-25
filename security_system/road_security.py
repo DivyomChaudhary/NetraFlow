@@ -148,7 +148,7 @@ class SecuritySystem:
         try:
             # 1. Clear Database
             with self.get_cursor() as cursor:
-                cursor.execute("DELETE FROM vehicle_logs")
+                cursor.execute("DELETE FROM vehicle_logs where id >= 0")
 
             # 2. Clear S3 Bucket
             # List all files and delete them
