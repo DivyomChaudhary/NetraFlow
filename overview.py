@@ -60,16 +60,27 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+
 # 2. Database Loader
 @st.cache_data(ttl=30)
 def load_data():
     db_path = os.path.join("logs_", "traffic_security.db")
     db_uri = f"file:{db_path}?mode=ro"
-    conn = sqlite3.connect(db_uri, uri=True, timeout=10)
-    df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    conn.close()
-    return df
+
+    try:
+        conn = sqlite3.connect(db_uri, uri=True, timeout=10)
+        df = pd.read_sql_query("SELECT * FROM vehicle_logs", conn)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        conn.close()
+        return df
+    except sqlite3.OperationalError:
+        # Beautiful styling match for your app theme
+        st.error(
+            "⚠️ **Maintenance**: Under maintenance, please try again later."
+        )
+        # Safely stops execution so the empty/broken dashboard elements below do not render
+        st.stop()
+
 
 # 3. Main Logic
 st.title("Traffic Security Analytics")
