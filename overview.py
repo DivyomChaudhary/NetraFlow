@@ -76,7 +76,7 @@ def load_data():
     except sqlite3.OperationalError:
         # Beautiful styling match for your app theme
         st.error(
-            "⚠️ **Maintenance**: Under maintenance, please try again later."
+            "⚠️ **Maintenance**: System is under maintenance, please try again later."
         )
         # Safely stops execution so the empty/broken dashboard elements below do not render
         st.stop()
