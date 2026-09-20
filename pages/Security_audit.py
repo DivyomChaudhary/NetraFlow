@@ -101,8 +101,6 @@ else:
         cols = st.columns(3)
 
         for i, (idx, row) in enumerate(df.iterrows()):
-            # Use enumerate's i, not the original df idx -- after filtering, idx
-            # can have gaps, which would break the round-robin column cycling
             col_index = i % 3
 
             with cols[col_index]:
