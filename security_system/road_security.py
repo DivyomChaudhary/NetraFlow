@@ -19,7 +19,7 @@ load_dotenv()
 import boto3
 from botocore.exceptions import NoCredentialsError
 
-cap = cv2.VideoCapture('../assets/vecteezy_traffic-Danil_Rudenko.mp4')
+cap = cv2.VideoCapture('../assets/india-west.mp4')
 wd = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 ht = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -79,6 +79,7 @@ class SecuritySystem:
         self.bucket_name = os.getenv('BUCKET_NAME')
         self.s3_client = boto3.client(
             's3',
+            region_name=os.getenv('AWS_BUCKET_REGION'),
             aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
             aws_secret_access_key=os.getenv('AWS_SECRET_KEY')
         )

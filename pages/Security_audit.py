@@ -77,6 +77,7 @@ conn.close()
 def get_presigned_url(s3_key):
     s3_client = boto3.client(
             's3',
+            region_name=os.getenv('AWS_BUCKET_REGION'),
             aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
             aws_secret_access_key=os.getenv('AWS_SECRET_KEY')
     )
@@ -91,20 +92,21 @@ def get_presigned_url(s3_key):
 if df.empty:
     st.info("No suspicious activity recorded yet. S3 gallery is empty.")
 else:
-    # DEFINING COLS HERE ensures it is resolved before the loop starts
-    cols = st.columns(3)
+    # Only show rows that actually have an S3 key -- skip missing/failed uploads entirely
+    df = df[df['s3_key'].notna() & (df['s3_key'] != '')]
 
-    for idx, row in df.iterrows():
-        # Using modulo (%) ensures we cycle through cols[0], cols[1], cols[2]
-        col_index = idx % 3
+    if df.empty:
+        st.info("No suspicious activity recorded yet. S3 gallery is empty.")
+    else:
+        cols = st.columns(3)
 
-        with cols[col_index]:
-            bucket = os.getenv('BUCKET_NAME')
-            file_key = row.get('s3_key', None)  # .get prevents crash if column missing
+        for i, (idx, row) in enumerate(df.iterrows()):
+            # Use enumerate's i, not the original df idx -- after filtering, idx
+            # can have gaps, which would break the round-robin column cycling
+            col_index = i % 3
 
-            if file_key:
+            with cols[col_index]:
+                file_key = row['s3_key']
                 img_url = get_presigned_url(file_key)
                 st.image(img_url, width='stretch')
                 st.caption(f" {row['color']} {row['type']} | {row['timestamp']}")
-            else:
-                st.warning(f"No image key for ID {row['vehicle_id']}")
