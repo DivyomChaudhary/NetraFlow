@@ -1,6 +1,6 @@
 # 🛡️ NetraFlow
 
-### Real-time Edge Security and Analytics for High-AQI Environments
+### Real-time Security Automation and Analytics for High-AQI Environments
 
 NetraFlow is a high-performance computer vision and data monitoring system designed to protect personnel in harsh environmental conditions. By analyzing real-time video feeds and system metrics, it provides actionable insights to mitigate operational risks.
 
