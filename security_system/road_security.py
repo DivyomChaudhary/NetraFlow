@@ -19,7 +19,7 @@ load_dotenv()
 import boto3
 from botocore.exceptions import NoCredentialsError
 
-cap = cv2.VideoCapture('../assets/india-west.mp4')
+cap = cv2.VideoCapture('../assets/Bellevue_116th_NE12th__2017-09-11_17-08-39.mp4')
 wd = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 ht = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 

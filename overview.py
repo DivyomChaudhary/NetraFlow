@@ -62,10 +62,27 @@ st.markdown("""
 
 
 # 2. Database Loader
+# NOTE: build the path from this file's own location, not the process's
+# current working directory. A relative path like os.path.join("logs_", ...)
+# only resolves correctly if Streamlit happens to be launched with the repo
+# root as cwd -- that broke after the AWS migration since the new
+# systemd/tmux session starts from a different working directory.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "logs_", "traffic_security.db")
+
+
 @st.cache_data(ttl=30)
 def load_data():
-    db_path = os.path.join("logs_", "traffic_security.db")
-    db_uri = f"file:{db_path}?mode=ro"
+    db_uri = f"file:{DB_PATH}?mode=ro"
+
+    if not os.path.exists(DB_PATH):
+        st.error(
+            f"⚠️ **Database not found** at `{DB_PATH}`.\n\n"
+            "Check that `logs_/traffic_security.db` was actually copied onto "
+            "this instance during the migration, and that it sits next to "
+            "`overview.py` in the repo layout."
+        )
+        st.stop()
 
     try:
         conn = sqlite3.connect(db_uri, uri=True, timeout=10)
@@ -73,12 +90,11 @@ def load_data():
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         conn.close()
         return df
-    except sqlite3.OperationalError:
-        # Beautiful styling match for your app theme
-        st.error(
-            "⚠️ **Maintenance**: System is under maintenance, please try again later."
-        )
-        # Safely stops execution so the empty/broken dashboard elements below do not render
+    except sqlite3.OperationalError as e:
+        st.error(f"⚠️ **Database error**: {e}")
+        st.stop()
+    except Exception as e:
+        st.error(f"⚠️ **Unexpected error loading data**: {e}")
         st.stop()
 
 
@@ -107,20 +123,32 @@ else:
     with col_left:
         st.subheader("Traffic Volume Over Time")
 
-        # 1. Resample and count specific ID occurrences
-        time_data = df.resample('5s', on='timestamp')['id'].count().reset_index(name='vehicle_count')
+        # 1. Label each row Normal vs. Blacklisted/Suspicious, then bucket into
+        #    30-second intervals and count each status separately.
+        df['status'] = df['is_suspicious'].map({1: 'Blacklisted / Suspicious', 0: 'Normal'})
+
+        time_data = (
+            df.groupby([pd.Grouper(key='timestamp', freq='30s'), 'status'])
+              .size()
+              .reset_index(name='vehicle_count')
+        )
 
         # 2. IMPORTANT: Remove intervals with 0 vehicles so Plotly doesn't render empty bars
         time_data = time_data[time_data['vehicle_count'] > 0]
 
-        # 3. Plot using the cleaned 'vehicle_count' column
+        # 3. Stacked bar: blue = normal traffic, red = blacklisted/suspicious
         fig = px.bar(time_data,
                      x='timestamp',
                      y='vehicle_count',
-                     title="Traffic Density Analysis",
+                     color='status',
+                     color_discrete_map={
+                         'Normal': '#3b82f6',
+                         'Blacklisted / Suspicious': '#ef4444',
+                     },
+                     title="Traffic Density & Security Alerts",
                      template="presentation",
-                     labels={'timestamp': 'Date and Time', 'vehicle_count': 'No. of Vehicles'})
-        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                     labels={'timestamp': 'Date and Time', 'vehicle_count': 'No. of Vehicles', 'status': 'Status'})
+        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', barmode='stack')
         st.plotly_chart(fig, width="stretch")
 
     with col_right:
