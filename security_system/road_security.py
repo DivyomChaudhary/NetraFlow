@@ -1,5 +1,6 @@
 import torch
 torch.backends.cudnn.benchmark = True
+# TODO: mAP test for computer vision model
 from ultralytics import YOLO, solutions
 import cv2
 import numpy as np
